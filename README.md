@@ -12,6 +12,7 @@ Portfolio full stack en español. React + TypeScript + Vite en el frontend; Clou
 - Demo ficticia explícita, utilizable sin cuentas ni claves.
 - Análisis real de un `@handle`, URL de canal o ID: videos publicados, títulos de playlists y suscripciones accesibles.
 - Motor humorístico de reglas: funciona con datos reales **sin contratar IA**.
+- Roasts dirigidos al personaje público del creador: promesas de títulos, tono editorial y autopromoción; tres intensidades que cambian los golpes, no solo la apertura. No se inventa vida privada.
 - Integración opcional con Workers AI, desactivada por defecto; fallback explícito a reglas si falla.
 - Copia y descarga del informe en texto, caché de una hora en Cloudflare y defensas básicas contra abuso.
 
@@ -64,7 +65,11 @@ npm run deploy
 
 `npm run deploy` ejecuta pruebas y build antes de publicar el entorno `production`. Wrangler devuelve una dirección `*.workers.dev`; no necesitas dominio. El mismo Worker sirve assets y API en un único origen.
 
-**Producción está separada de desarrollo:** `env.production.vars` mantiene `ENABLE_LIVE=false` y `ENABLE_AI=false`. Esto permite publicar primero solo la demo, sin clave. Para habilitar datos reales en producción, revisa los pendientes de límites y privacidad de `PLAN.md`, configura el secreto para ese entorno y cambia específicamente `env.production.vars.ENABLE_LIVE` a `"true"`.
+**Producción está separada de desarrollo:** por petición del usuario, `env.production` activa YouTube y Workers AI, con `REQUIRE_ABUSE_GUARD=true`. Requiere el secreto de YouTube y el binding `ANALYSIS_BUDGET`; sin protección no se ejecuta el análisis real. Para publicar únicamente demo, cambia `env.production.vars.ENABLE_LIVE` y `ENABLE_AI` a `"false"`.
+
+La protección usa un único Durable Object con almacenamiento SQLite (disponible en Workers Free). Reserva de forma atómica **20 intentos globales al día UTC**, hasta **3 por IP al día** y **uno por minuto**. También cuentan fallos y respuestas cacheadas; no se reembolsa una reserva. El contador persiste entre instancias y despliegues mientras se mantengan el namespace y el nombre del objeto. No impide ataques de denegación de servicio ni que un atacante agote los 20 intentos. No es un límite monetario universal para toda la cuenta.
+
+El secreto opcional `OWNER_IP` permite a direcciones exactas saltarse únicamente los límites personales y la espera; **sus intentos siguen contando dentro de los 20 globales**. Admite una IP o varias separadas por comas, por ejemplo IPv4 e IPv6 del propietario, sin rangos ni comodines. Configurar mediante `npx wrangler secret put OWNER_IP --env production`, nunca en código ni `vars`. No es autenticación: cualquiera que comparta una IP permitida obtiene la excepción; si cambia la IP pública (incluidas IPv6 temporales), hay que actualizarla. Las direcciones permitidas se conservan en el secreto hasta actualizarlo o eliminarlo, no en el contador diario.
 
 Para validar el bundle sin publicar:
 
@@ -88,7 +93,7 @@ Para experimentar con Workers AI:
 3. Cambia `ENABLE_AI` a `"true"` y comprueba `AI_MODEL`.
 4. El soporte local de IA puede requerir inferencia remota/autenticación. No asumas que `--local` convierte el modelo en una IA ejecutada en tu PC.
 
-Solo se envían títulos públicos, no IP, descripción ni nombre del canal. La respuesta debe ser JSON y citar evidencias existentes. Si falla, es inválida o tarda más de 15 s, se usa el motor de reglas. El timeout de la aplicación **no garantiza cancelar inferencia remota ni consumo**. La validación estructural no garantiza moderación ni veracidad semántica: completar evaluación antes de habilitarlo públicamente.
+Solo se envían títulos públicos y su tipo de evidencia, no IP, descripción ni nombre del canal. Una suscripción no se trata como autoría de ese contenido. La respuesta debe ser JSON y citar títulos existentes sin repetir evidencia o chiste en varias tarjetas. Si falla, es inválida o tarda más de 15 s, se usa el motor de reglas. El timeout de la aplicación **no garantiza cancelar inferencia remota ni consumo**. La validación estructural no garantiza moderación, calidad humorística ni veracidad semántica: la evaluación amplia sigue pendiente.
 
 ## Calidad
 
@@ -120,8 +125,8 @@ PLAN.md              Estado, pendientes y guía de evaluación
 
 - No existe promesa de hosting/API gratuito ilimitado. Mantén las cuotas de proveedor; una alerta presupuestaria no es un hard cap.
 - `ENABLE_LIVE=false` y `ENABLE_AI=false` son interruptores de emergencia.
-- El límite por IP y el contador diario son **por isolate**, se reinician y no son un control global robusto. No garantizan un máximo diario ni impiden abuso distribuido.
-- La caché almacena el informe y la muestra pública durante una hora en Cloudflare. La IP se usa temporalmente para limitar peticiones, pero no se guarda en la caché ni en una base de datos.
+- En producción el Durable Object limita globalmente las reservas antes de Google e IA, con fallo cerrado si no está disponible. Desarrollo conserva el limitador antiguo por isolate, que NO garantiza una cuota global. Los límites de proveedor siguen siendo necesarios; no activar planes de pago.
+- La caché almacena el informe y la muestra pública durante una hora en Cloudflare. El contador guarda un hash de IP con sal aleatoria diaria, no la IP en claro ni canales. Programa su eliminación al siguiente día UTC (sujeta a ejecución/reintento de alarma); una nueva petición también reemplaza el estado antiguo. Son datos seudonimizados, no una garantía de anonimato.
 - No se implementan cuentas, cookies de analítica ni registro de contenidos por la aplicación. Cloudflare/Google y fuentes de Google Fonts pueden procesar datos técnicos conforme a sus políticas.
 - Google Fonts es opcional: hay fuentes de respaldo del sistema. Autoalojarlas eliminaría esa petición externa.
 - Consulta las políticas de YouTube API antes de publicar. Que un dato sea público no elimina obligaciones de privacidad, atribución y tratamiento.

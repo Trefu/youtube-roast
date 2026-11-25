@@ -57,6 +57,16 @@ describe('roast transparente', () => {
     roast.signals[0].evidence = 'Un video que no existe';
     expect(validateAiRoast(roast, demoChannel)).toBeNull();
   });
+  it('rechaza tarjetas repetidas aunque tengan estructura válida', () => {
+    const roast = makeRoast(demoChannel, 'fuerte');
+    roast.signals[1].evidence = roast.signals[0].evidence;
+    expect(validateAiRoast(roast, demoChannel)).toBeNull();
+  });
+  it('rechaza el mismo chiste asociado a dos fuentes', () => {
+    const roast = makeRoast(demoChannel, 'fuerte');
+    roast.signals[1].joke = roast.signals[0].joke;
+    expect(validateAiRoast(roast, demoChannel)).toBeNull();
+  });
   it.each([null, {}, { headline: '<script>' }, { headline: 'x'.repeat(101) }])('rechaza salida IA inválida', value => {
     expect(validateAiRoast(value, demoChannel)).toBeNull();
   });

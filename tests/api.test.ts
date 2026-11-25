@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker from '../worker';
+import type { Analysis } from '../src/shared';
 
 const env = { ASSETS: { fetch: vi.fn() } as unknown as Fetcher };
 const ctx = { waitUntil: vi.fn() } as unknown as ExecutionContext;
@@ -75,7 +76,7 @@ describe('contrato HTTP', () => {
     vi.stubGlobal('fetch', upstream);
     vi.stubGlobal('caches', { default: { match: async () => undefined, put } });
     const response = await worker.fetch(request({ channel: '@ejemplo' }), { ...env, YOUTUBE_API_KEY: 'test-secret', ENABLE_LIVE: 'true' }, ctx);
-    const data = await response.json();
+    const data = await response.json() as Analysis;
     expect(response.status).toBe(200);
     expect(data).toMatchObject({ source: 'youtube', engine: 'rules', channel: { title: 'Canal público' } });
     expect(JSON.stringify(data)).not.toContain('test-secret');
@@ -90,5 +91,69 @@ describe('contrato HTTP', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ cached: true });
     expect(upstream).not.toHaveBeenCalled();
+  });
+  it('bloquea live sin protección antes de consultar Google o caché', async () => {
+    const upstream = vi.fn();
+    vi.stubGlobal('fetch', upstream);
+    const response = await worker.fetch(request({ channel: '@ejemplo' }), {
+      ...env, ENABLE_LIVE: 'true', YOUTUBE_API_KEY: 'secret', REQUIRE_ABUSE_GUARD: 'true',
+    }, ctx);
+    expect(response.status).toBe(503);
+    expect(upstream).not.toHaveBeenCalled();
+  });
+  it('un presupuesto agotado devuelve 429 y no llama a YouTube ni IA', async () => {
+    const upstream = vi.fn();
+    vi.stubGlobal('fetch', upstream);
+    const run = vi.fn();
+    const ANALYSIS_BUDGET = {
+      idFromName: vi.fn(() => 'singleton'),
+      get: () => ({ fetch: async () => Response.json({ error: 'Límite global diario alcanzado.' }, { status: 429 }) }),
+    } as unknown as DurableObjectNamespace;
+    const response = await worker.fetch(request({ channel: '@ejemplo' }, { 'CF-Connecting-IP': '192.0.2.1' }), {
+      ...env, ENABLE_LIVE: 'true', YOUTUBE_API_KEY: 'secret', REQUIRE_ABUSE_GUARD: 'true',
+      ENABLE_AI: 'true', AI: { run }, ANALYSIS_BUDGET,
+    }, ctx);
+    expect(response.status).toBe(429);
+    expect(upstream).not.toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
+    expect(ANALYSIS_BUDGET.idFromName).toHaveBeenCalledWith('global-analysis-budget-v1');
+  });
+  it.each(['text', 'object', 'choices', 'invalid'])('identifica IA o fallback explícito (formato=%s)', async format => {
+    const put = vi.fn(async () => {});
+    vi.stubGlobal('caches', { default: { match: async () => undefined, put } });
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const endpoint = new URL(String(input)).pathname.split('/').at(-1);
+      return Response.json(endpoint === 'channels'
+        ? { items: [{ id: 'UC1234567890123456789012', snippet: { title: 'Canal público' } }] }
+        : endpoint === 'playlists' ? { items: [{ id: 'PL123', snippet: { title: 'Curso React' } }] } : { items: [] });
+    }));
+    const roast = {
+      headline: 'Mucho React', text: 'Tu canal compila tutoriales.', challenge: 'Publica algo.',
+      signals: [{ label: 'Tutoriales', joke: 'Otro curso más.', evidence: 'Curso React' }],
+    };
+    const valid = format !== 'invalid';
+    const run = vi.fn(async () => format === 'choices'
+      ? { choices: [{ message: { content: JSON.stringify(roast) } }] }
+      : { response: format === 'object' ? roast : valid ? JSON.stringify(roast) : 'JSON inválido' });
+    const ANALYSIS_BUDGET = {
+      idFromName: () => 'singleton', get: () => ({ fetch: async () => new Response(null, { status: 204 }) }),
+    } as unknown as DurableObjectNamespace;
+    const response = await worker.fetch(request({ channel: '@ejemplo' }, { 'CF-Connecting-IP': '192.0.2.1' }), {
+      ...env, ENABLE_LIVE: 'true', YOUTUBE_API_KEY: 'secret', ENABLE_AI: 'true', AI: { run },
+      REQUIRE_ABUSE_GUARD: 'true', ANALYSIS_BUDGET,
+    }, ctx);
+    expect(response.status).toBe(200);
+    const data = await response.json() as Analysis;
+    expect(data).toMatchObject({ source: 'youtube', engine: valid ? 'ai' : 'rules' });
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      response_format: expect.objectContaining({
+        type: 'json_schema',
+        json_schema: expect.objectContaining({ required: ['headline', 'text', 'signals', 'challenge'] }),
+      }),
+    }));
+    expect(put).toHaveBeenCalledTimes(valid ? 1 : 0);
+    expect(JSON.stringify(run.mock.calls)).not.toContain('secret');
+    if (!valid) expect(data.channel.warnings.join(' ')).toContain('IA no disponible');
   });
 });

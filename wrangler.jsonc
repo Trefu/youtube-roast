@@ -4,6 +4,9 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-01-01",
   "workers_dev": true,
+  "migrations": [
+    { "tag": "v1-budget", "new_sqlite_classes": ["AnalysisBudget"] }
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
@@ -13,16 +16,23 @@
   "vars": {
     "ENABLE_LIVE": "true",
     "ENABLE_AI": "false",
-    "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct",
+    "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
     "DAILY_LIVE_LIMIT": "20"
   },
   "env": {
     "production": {
       "name": "youtube-roast",
+      "ai": { "binding": "AI" },
+      "durable_objects": {
+        "bindings": [
+          { "name": "ANALYSIS_BUDGET", "class_name": "AnalysisBudget" }
+        ]
+      },
       "vars": {
-        "ENABLE_LIVE": "false",
-        "ENABLE_AI": "false",
-        "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct",
+        "ENABLE_LIVE": "true",
+        "ENABLE_AI": "true",
+        "REQUIRE_ABUSE_GUARD": "true",
+        "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
         "DAILY_LIVE_LIMIT": "20"
       }
     }

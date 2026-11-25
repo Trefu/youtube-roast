@@ -20,9 +20,9 @@ Comunicar en español. No prometer gratuidad ilimitada ni afirmar verificaciones
 - Contratos compartidos en `src/shared.ts`.
 - YouTube Data API v3 exclusivamente desde servidor. Hasta 4 llamadas list por análisis sin caché.
 - Motor por reglas por defecto; Workers AI opt-in con fallback etiquetado.
-- No base de datos, OAuth ni pagos en el MVP.
+- No base de datos de perfiles, OAuth ni pagos en el MVP. Excepción técnica autorizada: Durable Object SQLite para contadores antiabuso, sin contenido de canales ni IP en claro.
 - `npm run dev`: Vite 5173 + Wrangler local 8787. `npm run preview`: build + Worker 8787.
-- Producción separada en `wrangler.jsonc` → `env.production`, live/IA apagados. `npm run deploy` usa ese entorno; nunca copiar secretos locales al código.
+- Producción separada en `wrangler.jsonc` → `env.production`, live/IA activados por petición del usuario y `REQUIRE_ABUSE_GUARD=true`. `npm run deploy` usa ese entorno; nunca copiar secretos locales al código.
 - CI de GitHub ejecuta pruebas/build y dry-run del Worker sin secretos. Actions fijadas a SHA; Dependabot propone actualizaciones mensuales.
 
 ## Invariantes del producto
@@ -42,7 +42,8 @@ Comunicar en español. No prometer gratuidad ilimitada ni afirmar verificaciones
 - El usuario aporta un identificador, nunca una URL arbitraria a visitar. Host de upstream fijo a Google.
 - No abrir scraping, APIs de pago, IA remota o despliegues sin consentimiento.
 - No activar servicios/planes de pago ni introducir tarjeta.
-- El limitador actual es por isolate: NO describirlo como una cuota global garantizada.
+- Desarrollo conserva limitador por isolate: NO es global. Producción reserva atómicamente en un Durable Object único: 20 intentos globales/día UTC, 3 por IP/día, uno/minuto; fallos y caché cuentan. No sustituye cuotas de proveedores ni protege de denegación de servicio. No resetear el contador para eludirlo.
+- El secreto opcional `OWNER_IP` exime a IP exactas separadas por comas (IPv4/IPv6), solo del límite personal y la espera, por autorización del usuario; nunca del presupuesto global. Sin rangos ni comodines. No publicar su valor ni simular la excepción con cabeceras de cliente.
 - Consultas y cuerpos acotados, timeout upstream, caché con TTL. Evitar paginación/reintentos sin presupuesto explícito.
 - El timeout de IA no implica cancelación del consumo remoto.
 
