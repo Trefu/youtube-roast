@@ -38,6 +38,7 @@ Proyecto creado el **2026-11-25** en `D:\Users\Trefu\Documents\Repos\youtube-roa
 ### Preparación de GitHub — 2026-11-25
 
 - Repositorio público creado por petición del usuario: https://github.com/Trefu/youtube-roast.
+- Primera subida confirmada en `main` (commit inicial `c06b59d`); GitHub Actions inició las comprobaciones. El resultado remoto de CI se consulta en la pestaña Actions; no confundir inicio con aprobación.
 - Git inicializado en rama `main`; sin importar historial ajeno.
 - Secretos y variantes `.dev.vars.*` excluidos; solo se publica la plantilla sin credenciales.
 - Configurados Node 24 (`.nvmrc`), engines, lockfile, EditorConfig y finales de línea uniformes.
@@ -47,6 +48,8 @@ Proyecto creado el **2026-11-25** en `D:\Users\Trefu\Documents\Repos\youtube-roa
 - `npm run deploy:dry`: **aprobado**; Workers empaqueta correctamente assets y backend sin publicar ni cargar la clave local en producción.
 - Auditoría de dependencias: **0 vulnerabilidades** al preparar esta subida.
 - Se añade `SECURITY.md`; quedan pendientes los bloqueantes de lanzamiento de la sección Prioridad 0.
+- Activados avisos de vulnerabilidades y reporte privado de seguridad en GitHub.
+- Código subido a GitHub; **la web aún no está desplegada en internet**.
 
 ## Siguiente paso para el usuario
 
